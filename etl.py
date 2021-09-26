@@ -11,7 +11,7 @@ from pyspark.sql.types import StructType as R, StructField as Fld, DoubleType as
     IntegerType as Int, DateType as Date, TimestampType
 
 config = configparser.ConfigParser()
-config.read('dl.cfg')
+config.read('aws/dl.cfg')
 
 os.environ['AWS_ACCESS_KEY_ID'] = config['AWS']['AWS_ACCESS_KEY_ID']
 os.environ['AWS_SECRET_ACCESS_KEY'] = config['AWS']['AWS_SECRET_ACCESS_KEY']
@@ -40,7 +40,7 @@ def process_docking_station_data(spark, input_data, output_infrastructure_data):
     """
 
     # sets filepath to docking station data file
-    station_data = os.path.join(input_data, '/infrastructure/FOI-0689-2122.csv')
+    station_data = os.path.join(input_data, 'infrastructure/FOI-0689-2122.csv')
 
     # set docking station table schema
     docking_schema = R([
@@ -74,8 +74,12 @@ def process_journey_data(spark, input_data, output_journey_data):
     :param output_journey_data: (str): Path to AWS S3 bucket of written partitioned parquet files
     """
 
-    # sets filepath to bike hire data files
-    journey_data = os.path.join(input_data, 'journey/*/*.csv')
+    # sets filepath to bike hire data files - Select 1 of 3 options below
+    journey_data = os.path.join(input_data, 'journey/sample.csv')
+    # journey_data = os.path.join(
+    #   's3a://lnd-bikehire/source_data/journey/2012/11. Journey Data Extract 23Aug-25 Aug12.csv')
+    # journey_data = os.path.join(input_data, 'journey/2012/*.csv')
+    # journey_data = os.path.join(input_data, 'journey/*/*.csv')
 
     journey_schema = R([
         Fld('Rental Id', Int(), True),
@@ -102,33 +106,35 @@ def process_journey_data(spark, input_data, output_journey_data):
         .withColumnRenamed("EndStation Id", "end_station_id") \
         .withColumn("rental_start_year", year("Start Date")) \
         .withColumn("rental_start_month", month("Start Date")) \
-        .withColumn("rental_start_day", dayofmonth("Start Date"))
+        .withColumn("rental_start_day", dayofmonth("Start Date")) \
+        .withColumnRenamed("Start Date", "rental_start_date") \
+        .withColumnRenamed("End Date", "rental_end_date")
 
     # extract columns to create a time dimension table
-    dim_time_table = df_staging.select('start_date').alias("rental_start_date") \
-        .withColumn('hour', hour('start_date')) \
-        .withColumn('day', dayofmonth('start_date')) \
-        .withColumn('week', weekofyear('start_date')) \
-        .withColumn('month', month('start_date')) \
-        .withColumn('year', year('start_date')) \
-        .withColumn('weekday', dayofweek('start_date'))
+    dim_time_table = df_staging.select('rental_start_date') \
+        .withColumn('hour', hour('rental_start_date')) \
+        .withColumn('day', dayofmonth('rental_start_date')) \
+        .withColumn('week', weekofyear('rental_start_date')) \
+        .withColumn('month', month('rental_start_date')) \
+        .withColumn('year', year('rental_start_date')) \
+        .withColumn('weekday', dayofweek('rental_start_date'))
 
     # write time table to parquet files partitioned by year and month
-    dim_time_table.write.partitionBy('year', 'month').mode("overwrite").parquet(output_journey_data + 'time')
+    dim_time_table.repartition(10).write.partitionBy('year', 'month').mode("overwrite").parquet(output_journey_data + 'time')
 
     fact_journeys_table = df_staging.select([col("Rental Id").alias("rental_id"),
                                              col("Bike Id").alias("bike_id"),
                                              col("Duration").alias("rental_duration_seconds"),
                                              col("start_station_id"),
-                                             col("Start Date").alias("rental_start_date"),
+                                             col("rental_start_date"),
                                              col("end_station_id"),
-                                             col("End Date").alias("rental_end_date")]) \
+                                             col("rental_end_date")]) \
         .withColumn("rental_start_year", year("rental_start_date")) \
         .withColumn("rental_start_month", month("rental_start_date")) \
         .withColumn("rental_start_day", dayofmonth("rental_start_date"))
 
     # write journeys fact table to parquet files partitioned by year and month
-    fact_journeys_table.write.partitionBy('rental_start_year', 'rental_start_month') \
+    fact_journeys_table.repartition(10).write.partitionBy('rental_start_year', 'rental_start_month') \
         .mode("overwrite").parquet(output_journey_data)
 
 
@@ -205,7 +211,7 @@ def journey_distance(spark, output_infrastructure_data, output_journey_data):
                                                                   distances_df['end_lat'], distances_df['end_lon']))
 
     # Write journey distances table to parquet files partitioned by year and month
-    dim_journey_distances.write.partitionBy('rental_start_year', 'rental_start_month').mode('overwrite') \
+    dim_journey_distances.repartition(10).write.partitionBy('rental_start_year', 'rental_start_month').mode('overwrite') \
         .parquet(output_journey_data + 'journey_distances')
 
 
@@ -243,7 +249,7 @@ def process_weather_data(spark, input_data, output_weather_data):
         .drop('day')
 
     # write daily weather table to parquet files  partitioned by year and month
-    dim_daily_weather_table.write.partitionBy('year', 'month').mode("overwrite").parquet(output_weather_data)
+    dim_daily_weather_table.repartition(10).write.partitionBy('year', 'month').mode("overwrite").parquet(output_weather_data)
 
 
 def main():
@@ -251,9 +257,9 @@ def main():
 
     spark = create_spark_session()
     input_data = "s3a://lnd-bikehire/source_data/"
-    output_journey_data = "s3a://lnd-bikehire/journeys"
-    output_infrastructure_data = "s3a://lnd-bikehire/infrastructure"
-    output_weather_data = "s3a://lnd-bikehire/weather"
+    output_journey_data = "s3a://lnd-bikehire/journeys/"
+    output_infrastructure_data = "s3a://lnd-bikehire/infrastructure/"
+    output_weather_data = "s3a://lnd-bikehire/weather/"
 
     print('Processing docking station data...')
     process_docking_station_data(spark, input_data, output_journey_data)
