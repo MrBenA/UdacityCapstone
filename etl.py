@@ -28,7 +28,7 @@ def create_spark_session():
     return spark
 
 
-def process_docking_station_data(spark, input_data, output_infrastructure_data):
+def process_docking_station_data(spark, input_data, output_data):
     """Processes bike docking station data to AWS S3 hosted parquet file
 
     - Reads in docking station data from a csv file and builds a schema defined docking station dataframe.
@@ -36,7 +36,7 @@ def process_docking_station_data(spark, input_data, output_infrastructure_data):
 
     :param spark: (object): Built spark session instance
     :param input_data: (str): Path to AWS S3 bucket source data
-    :param output_infrastructure_data: (str): Path to AWS S3 bucket of written parquet file
+    :param output_data: (str): Path to AWS S3 bucket of written parquet file
     """
 
     # sets filepath to docking station data file
@@ -55,10 +55,10 @@ def process_docking_station_data(spark, input_data, output_infrastructure_data):
     dim_docking_stations = spark.read.option("header", True).csv(station_data, docking_schema)
 
     # write docking station table to parquet file
-    dim_docking_stations.write.mode("overwrite").parquet(output_infrastructure_data + 'docking_stations')
+    dim_docking_stations.write.mode("overwrite").parquet(output_data + 'infrastructure/docking_stations')
 
 
-def process_journey_data(spark, input_data, output_journey_data):
+def process_journey_data(spark, input_data, output_data):
     """Processes bike hire data to partitioned parquet files
 
     - Reads in bike hire journey data from csv files to schema defined staging dataframe.
@@ -71,14 +71,13 @@ def process_journey_data(spark, input_data, output_journey_data):
 
     :param spark: (object): Built spark session instance
     :param input_data: (str): Path to AWS S3 bucket source data
-    :param output_journey_data: (str): Path to AWS S3 bucket of written partitioned parquet files
+    :param output_data: (str): Path to AWS S3 bucket of written partitioned parquet files
     """
 
     # sets filepath to bike hire data files - Select 1 of 3 options below
-    journey_data = os.path.join(input_data, 'journey/sample.csv')
-    # journey_data = os.path.join(
-    #   's3a://lnd-bikehire/source_data/journey/2012/11. Journey Data Extract 23Aug-25 Aug12.csv')
-    # journey_data = os.path.join(input_data, 'journey/2012/*.csv')
+    # journey_data = os.path.join(input_data, 'journey/sample.csv')
+    # journey_data = os.path.join(input_data, 'journey/2012/11. Journey Data Extract 23Aug-25 Aug12.csv')
+    journey_data = os.path.join(input_data, 'journey/2012/*.csv')
     # journey_data = os.path.join(input_data, 'journey/*/*.csv')
 
     journey_schema = R([
@@ -99,7 +98,6 @@ def process_journey_data(spark, input_data, output_journey_data):
     # Staging Transforms: Timestamp conversions | Duration filter | Start Date Filter | Drop duplicates
     df_staging = raw_df.withColumn("Start Date", unix_timestamp("Start Date", 'dd/MM/yyyy HH:mm').cast(TimestampType())) \
         .withColumn("End Date", unix_timestamp("End Date", 'dd/MM/yyyy HH:mm').cast(TimestampType())) \
-        .filter(raw_df.Duration > 59) \
         .filter(col("Start Date") > "2012-01-01 00:00:00") \
         .dropDuplicates(["Rental Id"]) \
         .withColumnRenamed("StartStation Id", "start_station_id") \
@@ -114,13 +112,18 @@ def process_journey_data(spark, input_data, output_journey_data):
     dim_time_table = df_staging.select('rental_start_date') \
         .withColumn('hour', hour('rental_start_date')) \
         .withColumn('day', dayofmonth('rental_start_date')) \
+        .withColumn('weekday', dayofweek('rental_start_date')) \
         .withColumn('week', weekofyear('rental_start_date')) \
         .withColumn('month', month('rental_start_date')) \
-        .withColumn('year', year('rental_start_date')) \
-        .withColumn('weekday', dayofweek('rental_start_date'))
+        .withColumn('year', year('rental_start_date'))
 
     # write time table to parquet files partitioned by year and month
-    dim_time_table.repartition(10).write.partitionBy('year', 'month').mode("overwrite").parquet(output_journey_data + 'time')
+    dim_time_table.withColumn('month_', month('rental_start_date')) \
+        .withColumn('year_', year('rental_start_date')) \
+        .repartition(10) \
+        .write.partitionBy('year_', 'month_') \
+        .mode("overwrite") \
+        .parquet(output_data + 'time')
 
     fact_journeys_table = df_staging.select([col("Rental Id").alias("rental_id"),
                                              col("Bike Id").alias("bike_id"),
@@ -134,11 +137,15 @@ def process_journey_data(spark, input_data, output_journey_data):
         .withColumn("rental_start_day", dayofmonth("rental_start_date"))
 
     # write journeys fact table to parquet files partitioned by year and month
-    fact_journeys_table.repartition(10).write.partitionBy('rental_start_year', 'rental_start_month') \
-        .mode("overwrite").parquet(output_journey_data)
+    fact_journeys_table.withColumn("rental_start_year_", col("rental_start_year")) \
+        .withColumn("rental_start_month_", col("rental_start_month")) \
+        .repartition(10) \
+        .write.partitionBy('rental_start_year_', 'rental_start_month_') \
+        .mode("overwrite") \
+        .parquet(output_data + 'journeys')
 
 
-def journey_distance(spark, output_infrastructure_data, output_journey_data):
+def journey_distance(spark, output_infrastructure_data, output_data):
     """Processes journey and docking station data to create a dimension table of calculated journey distances
 
     - Reads docking station id and location coordinates data from processed parquet file, Creates dataframe.
@@ -148,7 +155,7 @@ def journey_distance(spark, output_infrastructure_data, output_journey_data):
 
     :param spark: (object): Built spark session instance
     :param output_infrastructure_data: (str): Path to processed docking station data
-    :param output_journey_data: (str): Path to processed journey data
+    :param output_data: (str): Path to processed journey data
     """
 
     def journey_distance_calc(start_lat, start_lon, end_lat, end_lon):
@@ -168,17 +175,21 @@ def journey_distance(spark, output_infrastructure_data, output_journey_data):
         elat = radians(float(end_lat))
         elon = radians(float(end_lon))
 
-        distance = 6371.01 * acos(sin(slat) * sin(elat) + cos(slat) * cos(elat) * cos(slon - elon))
-        return round(distance, 2)
+        if slat == elat and slon == elon:
+            dist = 0
+        else:
+            distance = 6371.01 * acos(sin(slat) * sin(elat) + cos(slat) * cos(elat) * cos(slon - elon))
+            return round(distance, 2)
 
     # Read in processed docking station data from parquet file
-    stations_df = spark.read.parquet(output_infrastructure_data + 'docking_stations') \
+    stations_df = spark.read.parquet(output_data + 'infrastructure/docking_stations') \
         .select('docking_station_id', 'docking_station_latitude', 'docking_station_longitude')
 
     # Read in processed journey data from parquet files
-    journeys_df = spark.read.parquet(output_journey_data) \
+    journeys_df = spark.read.parquet(output_data + 'journeys') \
         .select('rental_id', 'start_station_id', 'end_station_id',
-                'rental_start_day', 'rental_start_month', 'rental_start_year')
+                'rental_start_day', 'rental_start_month', 'rental_start_year') \
+        .filter('end_station_id > 0')
 
     # Create starting station dataframe for journey distance calculation
     start_station_df = journeys_df.join(stations_df, (journeys_df.start_station_id == stations_df.docking_station_id),
@@ -204,6 +215,13 @@ def journey_distance(spark, output_infrastructure_data, output_journey_data):
     # Create journey distances dataframe from joined starting/ending dataframes
     distances_df = start_station_df.join(end_station_df, ["rental_id"]).dropna()
 
+    # TEST WRITE -- DELETE--
+    #distances_df.withColumn("rental_start_year_", col("rental_start_year")) \
+        #.repartition(10) \
+        #.write.partitionBy('rental_start_year_') \
+        #.mode('overwrite') \
+        #.parquet(output_data + 'test')
+
     # Add column to dataframe of calculated distances
     distances_udf = udf(journey_distance_calc, Dbl())
     dim_journey_distances = distances_df.withColumn("journey_distance_km",
@@ -211,16 +229,20 @@ def journey_distance(spark, output_infrastructure_data, output_journey_data):
                                                                   distances_df['end_lat'], distances_df['end_lon']))
 
     # Write journey distances table to parquet files partitioned by year and month
-    dim_journey_distances.repartition(10).write.partitionBy('rental_start_year', 'rental_start_month').mode('overwrite') \
-        .parquet(output_journey_data + 'journey_distances')
+    dim_journey_distances.withColumn("rental_start_year_", col("rental_start_year")) \
+        .withColumn("rental_start_month_", col("rental_start_month")) \
+        .repartition(10) \
+        .write.partitionBy('rental_start_year_', 'rental_start_month_') \
+        .mode('overwrite') \
+        .parquet(output_data + 'journey_distances')
 
 
-def process_weather_data(spark, input_data, output_weather_data):
+def process_weather_data(spark, input_data, output_data):
     """Processes weather data from json files to partitioned parquet files
 
     :param spark:(object): Built spark session instance
     :param input_data: (str): Path to AWS S3 bucket source data
-    :param output_weather_data: (str): Path to AWS S3 bucket of written partitioned parquet files
+    :param output_data: (str): Path to AWS S3 bucket of written partitioned parquet files
     """
 
     # sets filepath to bike hire data files
@@ -249,7 +271,12 @@ def process_weather_data(spark, input_data, output_weather_data):
         .drop('day')
 
     # write daily weather table to parquet files  partitioned by year and month
-    dim_daily_weather_table.repartition(10).write.partitionBy('year', 'month').mode("overwrite").parquet(output_weather_data)
+    dim_daily_weather_table.withColumn("year_", col('year')) \
+        .withColumn('month_', col('month')) \
+        .repartition(10) \
+        .write.partitionBy('year_', 'month_') \
+        .mode("overwrite") \
+        .parquet(output_data + 'weather')
 
 
 def main():
@@ -257,24 +284,25 @@ def main():
 
     spark = create_spark_session()
     input_data = "s3a://lnd-bikehire/source_data/"
-    output_journey_data = "s3a://lnd-bikehire/journeys/"
-    output_infrastructure_data = "s3a://lnd-bikehire/infrastructure/"
-    output_weather_data = "s3a://lnd-bikehire/weather/"
+    output_data = "s3a://lnd-bikehire/"
+    # output_journey_data = "s3a://lnd-bikehire/journeys/"
+    # output_infrastructure_data = "s3a://lnd-bikehire/infrastructure/"
+    # output_weather_data = "s3a://lnd-bikehire/weather/"
 
     print('Processing docking station data...')
-    process_docking_station_data(spark, input_data, output_journey_data)
+    process_docking_station_data(spark, input_data, output_data)
     print('Docking station data processing complete!')
 
     print('Processing journey data...')
-    process_journey_data(spark, input_data, output_journey_data)
+    process_journey_data(spark, input_data, output_data)
     print('Journey data processing complete!')
 
     print('Calculating journey distances...')
-    journey_distance(spark, output_infrastructure_data, output_journey_data)
+    journey_distance(spark, output_data, output_data)
     print('Journey distance calculations complete!')
 
     print('Processing weather data...')
-    process_weather_data(spark, input_data, output_weather_data)
+    process_weather_data(spark, input_data, output_data)
     print('Weather data processing complete!')
 
     print('Woo... All Data Processed!')

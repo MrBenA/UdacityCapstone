@@ -74,7 +74,7 @@ dim_daily_weather_table_create = ("""
 fact_journeys_table_create = ("""
     CREATE TABLE IF NOT EXISTS fact_journeys (
     rental_id INTEGER NOT NULL,
-    bike_id INTEGER NOT NULL,
+    bike_id INTEGER,
     rental_duration_seconds INTEGER,
     start_station_id INTEGER,
     rental_start_date TIMESTAMP,
