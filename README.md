@@ -10,55 +10,57 @@ weather data, to gain insight into rental behaviours, and identify any correlati
 
 ## Project Scope
 This project is an Extract, Transform and Load (ETL) pipeline for the processing of bicycle hire journey and weather 
-data for the year 2012.<br>
+data for the year 2012. circa. 9M data records<br>
 The project scripts extract data from Amazon S3 hosted CSV and Json source data files. The data is transformed to 
 S3 hosted partitioned parquet files, with the structured data subsequently loaded to a cloud data warehouse as fact and 
 dimension tables for building dashboards, driving ML projects or adhoc analysis.
 
-### Technologies and Architecture
+## Technologies and Architecture
 <p align="center">
 <img alt="Cloud Architecture" src="images/lndbikehire_Architecture.png" title="Cloud 
 Architecture"/>
 </p>
 
-:card_index_dividers: Cloud Data Lake = Amazon S3 - Simple Storage Service<br>
+:card_index_dividers: *Cloud Data Lake* = Amazon S3 - Simple Storage Service<br>
 Amazon S3 is an object storage service offering scalability, data availability, security, and performance.
 Customers can use it to, cost effectively, store and protect any amount of data for a range of use cases, such as data 
 lakes.
 
-:toolbox: Data Processing = Amazon EMR - Cluster running Apache Spark<br>
+:toolbox: *Data Processing* = Amazon EMR - Cluster running Apache Spark<br>
 Amazon EMR is a managed cluster platform that simplifies running big data frameworks, such as Apache Hadoop and Apache Spark, on AWS to process and analyze vast amounts of data.
 Using such frameworks and related open-source projects, you can process data for analytics purposes and business 
 intelligence workloads. Amazon EMR also lets you transform and move large amounts of data into and out of other AWS 
 data stores and databases, such as Amazon Simple Storage Service (Amazon S3).
 
-:file_cabinet: Cloud Data Warehouse = Amazon Redshift<br>
+:file_cabinet: *Cloud Data Warehouse* = Amazon Redshift<br>
 Amazon Redshift is a fully managed, cloud-based, petabyte-scale data warehouse service.
 Redshift has a massively parallel processing (MPP) architecture, where data is distributed across multiple compute nodes.
 This Redshift to run queries against each compute node in parallel, dramatically increasing query performance.
 Amazon Redshift prices are calculated based on hours of usage. Expenses can be controlled by spinning up clusters only when required.
 
-### Repository
+## Repository
 
 #### Project files and process
 :white_medium_square: [ **create_tables.py** ] (*Python 3 script*):<br>
   Connects to Redshift cluster, creates database fact and dimension tables as per queries from the *sql_queries.py* 
   python file.
   
-:white_medium_square: [ **sql_queries.py** ] (*Python 3 script*):<br>
+:white_medium_square: [ **sql_queries.py** ]<br>
   CREATE and COPY SQL statements used by create_tables.py
 
-:white_medium_square: [ **dwh_load.py** ] (*Python 3 script*):<br>
+:white_medium_square: [ **dwh_load.py** ]<br>
   Executes SQL COPY queries on Amazon S3 hosted parquet files to populate data warehouse tables<br>
   Runs record count and duplicate record checks on data warehouse tables after data loading.
 
-:white_medium_square: [ **etl.py** ] (*Python 3 script*):<br>
+:white_medium_square: [ **etl.py** ]<br>
   Data processing script;
 1) Loads data from S3 hosted CSV and JSON files into Spark staging dataframe.
-2) Generates Fact and Dimension dataframes from staging dataframe, after filters, dropped nulls and table schemas are applied.<br>
-3) Writes fact and dimension dataframes back to AWS S3 buckets, as partitioned parquet files.
+2) Generates Fact and Dimension dataframes from staging dataframe after filtering, dropped nulls and table schemas 
+   are applied.<br>
+3) Joins dataframes to perform a completed journey distance calculation.
+4) Writes fact and dimension dataframes back to AWS S3 buckets, as partitioned parquet files.
 
-:white_medium_square: [ **dl.cfg** ] (*config text file*):<br>
+:white_medium_square: [ **dl.cfg** ]<br>
   Contains user AWS credentials, S3 bucket paths, cluster details, all utilised by project Python scripts.
 
 -----
@@ -68,7 +70,7 @@ Amazon Redshift prices are calculated based on hours of usage. Expenses can be c
 - AWS Identity and access management (IAM) credentials with permissions for Amazon S3 and Redshift cluster access.
 - A running Apache Spark cluster for the data processing. With your Apache Spark deployment of choice!
 - A running Amazon Redshift cluster for the data warehouse.
-
+<br>
 
 :small_blue_diamond: From the repository, download/transfer 4 No. Python scripts and the config file, as detailed 
 above, to a project workspace.<br>
@@ -317,18 +319,21 @@ Sample...
 
 Where the following scenarios may occur, the project would be adapted as follows:
 
-:white_medium_square: The data was increased by 100x?
+:white_medium_square: The data was increased by 100x?<br>
+
 Incremental data transformation and loading would be introduced, appending only new data to the data warehouse. 
 The partitioning of larger tables would be introduced with indexing to allow for quicker access.
 In addition, the EMR cluster hardware configuration can be scaled up to account for any increased processing 
 requirements.
 
-:white_medium_square: The pipeline would be run on a daily basis by 7am each day?
+:white_medium_square: The pipeline would be run on a daily basis by 7am each day?<br>
+
 The orchestration tool, Apache Airflow, would be introduced to schedule the ETL pipeline run at the required schedule.
 Airflow uses directed acyclic graphs (DAGs) to manage workflow orchestration. DAGs can be run either on a defined 
 schedule (e.g. hourly or daily) or based on external event triggers.
 
 :white_medium_square: The database needed to be accessed by 100+ people?<br>
+
 To achieve the best possible query performance, data needs to be distributed across the compute nodes in a way that 
 is optimal to the workloads being run on the cluster. The optimal way to distribute data for tables that are 
 commonly joined is to store rows with matching join keys on the same nodes. This enables Amazon Redshift to join the 
