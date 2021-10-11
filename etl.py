@@ -75,7 +75,6 @@ def process_journey_data(spark, input_data, output_data):
     """
 
     # sets filepath to bike hire data files - Select 1 of 3 options below
-    # journey_data = os.path.join(input_data, 'journey/sample.csv')
     # journey_data = os.path.join(input_data, 'journey/2012/11. Journey Data Extract 23Aug-25 Aug12.csv')
     journey_data = os.path.join(input_data, 'journey/2012/*.csv')
     # journey_data = os.path.join(input_data, 'journey/*/*.csv')
@@ -216,11 +215,11 @@ def journey_distance(spark, output_infrastructure_data, output_data):
     distances_df = start_station_df.join(end_station_df, ["rental_id"]).dropna()
 
     # TEST WRITE -- DELETE--
-    #distances_df.withColumn("rental_start_year_", col("rental_start_year")) \
-        #.repartition(10) \
-        #.write.partitionBy('rental_start_year_') \
-        #.mode('overwrite') \
-        #.parquet(output_data + 'test')
+    # distances_df.withColumn("rental_start_year_", col("rental_start_year")) \
+    # .repartition(10) \
+    # .write.partitionBy('rental_start_year_') \
+    # .mode('overwrite') \
+    # .parquet(output_data + 'test')
 
     # Add column to dataframe of calculated distances
     distances_udf = udf(journey_distance_calc, Dbl())
@@ -283,11 +282,8 @@ def main():
     """Main script function"""
 
     spark = create_spark_session()
-    input_data = "s3a://lnd-bikehire/source_data/"
-    output_data = "s3a://lnd-bikehire/"
-    # output_journey_data = "s3a://lnd-bikehire/journeys/"
-    # output_infrastructure_data = "s3a://lnd-bikehire/infrastructure/"
-    # output_weather_data = "s3a://lnd-bikehire/weather/"
+    input_data = config.get("S3", "INPUT_DATA")
+    output_data = config.get("S3", "OUTPUT_DATA")
 
     print('Processing docking station data...')
     process_docking_station_data(spark, input_data, output_data)
