@@ -10,7 +10,7 @@ weather data, to gain insight into rental behaviours, and identify any correlati
 
 ## Project Scope
 This project is an Extract, Transform and Load (ETL) pipeline for the processing of bicycle hire journey and weather 
-data for the year 2012. circa. 9M data records<br>
+data for the year 2012. circa. 9M journey records<br>
 The project scripts extract data from Amazon S3 hosted CSV and Json source data files. The data is transformed to 
 S3 hosted partitioned parquet files, with the structured data subsequently loaded to a cloud data warehouse as fact and 
 dimension tables for building dashboards, driving ML projects or adhoc analysis.
@@ -21,18 +21,18 @@ dimension tables for building dashboards, driving ML projects or adhoc analysis.
 Architecture"/>
 </p>
 
-:card_index_dividers: *Cloud Data Lake* = Amazon S3 - Simple Storage Service<br>
+:card_index_dividers: **Cloud Data Lake** = Amazon S3 - Simple Storage Service<br>
 Amazon S3 is an object storage service offering scalability, data availability, security, and performance.
 Customers can use it to, cost effectively, store and protect any amount of data for a range of use cases, such as data 
 lakes.
 
-:toolbox: *Data Processing* = Amazon EMR - Cluster running Apache Spark<br>
+:toolbox: **Data Processing** = Amazon EMR - Cluster running Apache Spark<br>
 Amazon EMR is a managed cluster platform that simplifies running big data frameworks, such as Apache Hadoop and Apache Spark, on AWS to process and analyze vast amounts of data.
 Using such frameworks and related open-source projects, you can process data for analytics purposes and business 
 intelligence workloads. Amazon EMR also lets you transform and move large amounts of data into and out of other AWS 
 data stores and databases, such as Amazon Simple Storage Service (Amazon S3).
 
-:file_cabinet: *Cloud Data Warehouse* = Amazon Redshift<br>
+:file_cabinet: **Cloud Data Warehouse** = Amazon Redshift<br>
 Amazon Redshift is a fully managed, cloud-based, petabyte-scale data warehouse service.
 Redshift has a massively parallel processing (MPP) architecture, where data is distributed across multiple compute nodes.
 This Redshift to run queries against each compute node in parallel, dramatically increasing query performance.
