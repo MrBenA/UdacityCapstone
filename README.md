@@ -41,7 +41,7 @@ Amazon Redshift prices are calculated based on hours of usage. Expenses can be c
 ## Repository
 
 #### Project files and process
-:white_medium_square: [ **create_tables.py** ] (*Python 3 script*):<br>
+:white_medium_square: [ **create_tables.py** ]<br>
   Connects to Redshift cluster, creates database fact and dimension tables as per queries from the *sql_queries.py* 
   python file.
   
