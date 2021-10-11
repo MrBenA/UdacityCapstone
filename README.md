@@ -16,18 +16,86 @@ Extracting data from CSV and json source data files, stored within an Amazon S3 
 dimension tables, and loaded to a data warehouse for analytical insight.
 
 ### Technologies and Architecture
-Cloud Data Store = Amazon S3 - Simple Storage Service
-Cloud Data Warehouse = AWS Redshift
-Data Processing = Amazon EMR - Cluster running Apache Spark
-
-INSERT IMAGE
-
-### Logical Data Model
-<p>
-<img alt="Logical Data Model" src="images/lndbikehire_logicaldm.png" title="Logical Data Model"/>
+<p align="center">
+<img alt="Cloud Architecture" src="images/lndbikehire_Architecture.png" title="Cloud 
+Architecture"/>
 </p>
+
+Cloud Data Store = Amazon S3 - Simple Storage Service<br>
+Data Processing = Amazon EMR - Cluster running Apache Spark<br>
+Cloud Data Warehouse = Amazon Redshift<br>
+
+### Repository
+
+#### Project files and process
+- [ **create_tables.py** ] (*Python 3 script*):<br>
+  Connects to Redshift cluster, creates database fact and dimension tables as per queries from<br>
+  the *sql_queries.py* python file.
+  
+- [ **sql_queries.py** ] (*Python 3 script*):<br>
+  CREATE and COPY SQL statements used by create_tables.py
+
+- [ **dwh_load.py** ] (*Python 3 script*):<br>
+  Executes SQL COPY queries on AWS S3 hosted parquet files to populate data warehouse tables<br>
+  Runs record count and duplicate record checks on data warehouse tables after data loading.
+
+- [ **etl.py** ] (*Python 3 script*):<br>
+  Data processing script; 1) Loads data from S3 hosted CSV and JSON files into Spark staging dataframe. 2) Generates 
+  Fact and Dimension dataframes from staging dataframe, after filters, dropped nulls and table schemas are applied.<br>
+  3) Writes fact and dimension dataframes back to AWS S3 buckets, as partitioned parquet files.
+
+- [ **dl.cfg** ] (*config text file*):<br>
+  Contains user AWS credentials, S3 bucket paths, cluster details, all utilised by project Python scripts.
+
 -----
-# Dataset
+# Running the project
+
+## Prerequisites
+- AWS Identity and access management (IAM) credentials with permissions for Amazon S3 and Redshift cluster access.
+- A running Apache Spark cluster for the data processing. With your Apache Spark deployment of choice!
+- A running Amazon Redshift cluster for the data warehouse.
+
+
+1. From the repository, download/transfer 4 No. Python scripts and the config file, as detailed above, to a project workspace.<br>
+
+2. Add AWS credentials, cluster endpoint, database and IAM role details to the config file. As per example below...
+
+        [AWS]
+        AWS_ACCESS_KEY_ID = SDDFHYJFG7FREWRQQAZXH3DH #TODO
+        AWS_SECRET_ACCESS_KEY = Pdfgsf45srP+754SDFDSgbfuEbh #TODO
+        
+        [CLUSTER]
+        HOST = dwhcluster.cbndkripqrtkx.us-west-2.redshift.amazonaws.com #TODO
+        DB_NAME = lndbikehire #TODO
+        DB_USER = lbhuser #TODO
+        DB_PASSWORD = Passw0rd #TODO
+        DB_PORT = 5439
+        
+        [IAM_ROLE]
+        ARN ='arn:aws:iam::096836204836:role/dwhRole' #TODO
+
+        [S3]
+        INPUT_DATA = s3a://lnd-bikehire/source_data/
+        OUTPUT_DATA = s3a://lnd-bikehire/ #TODO
+
+3. Open a terminal window to your workspace and change directory to where the project files are located.<br>
+   
+        C:\users\username>cd C:\users\username\path\to\project
+   
+4. Run first Python script to create table schema on Redshift cluster... *create_tables.py*<br>
+
+        C:\users\username>cd C:\users\username\path\to\project>python3 create_tables.py
+
+5. Run second python script to process S3 hosted CSV & JSON files to partitioned parquet files... *etl.py*<br>
+
+        C:\users\username>cd C:\users\username\path\to\project>python3 etl.py 
+
+6. Run third python script to load data from parquet files to data warehouse... *dwh_load.py*<br>
+
+        C:\users\username>cd C:\users\username\path\to\project>python3 dwh_load.py
+---
+-----
+# :file_folder: Dataset
 This project comprises data from 3 sources. Data used by this project is stored within an AWS S3 Data lake
 
 ### Journey data
@@ -134,7 +202,10 @@ JSON sample...
 -----
 # Cloud Data Warehouse Schema
 A star schema relational database, with a single fact and multiple dimension tables.<br>
-INSERT IMAGE
+#### Logical Data Model
+<p align="center">
+<img alt="Logical Data Model" src="images/lndbikehire_logicaldm.png" title="Logical Data Model"/>
+</p>
 
 ## Data Dictionary
 ### Table: dim_daily_weather
@@ -224,65 +295,3 @@ Sample...
 --- | --- | --- | --- | --- | --- | --- | --- | --- | ---
 10149896 | 4655	| 515 | 14 | 2012-02-22 07:45:00 | 67 | 2012-02-22 07:54:00 | 2012 | 2 | 22
 
-### Repository
-
-#### Project files and process
-- [ **create_tables.py** ] (*Python 3 script*):<br>
-  Connects to Redshift cluster, creates database fact and dimension tables as per queries from<br>
-  the *sql_queries.py* python file.
-  
-- [ **sql_queries.py** ] (*Python 3 script*):<br>
-  CREATE and COPY SQL statements used by create_tables.py
-
-- [ **dwh_load.py** ] (*Python 3 script*):<br>
-  Executes SQL COPY queries on AWS S3 hosted parquet files to populate data warehouse tables<br>
-  Runs record count and duplicate record checks on data warehouse tables after data loading.
-
-- [ **etl.py** ] (*Python 3 script*):<br>
-  Data processing script; 1) Loads data from S3 hosted CSV and JSON files into Spark staging dataframe. 2) Generates 
-  Fact and Dimension dataframes from staging dataframe, after filters, dropped nulls and table schemas are applied.<br>
-  3) Writes fact and dimension dataframes back to AWS S3 buckets, as partitioned parquet files.
-
-- [ **dl.cfg** ] (*config text file*):<br>
-  Contains user AWS credentials, S3 bucket paths, cluster details, all utilised by project Python scripts.
-
------
-# Running the project
-
-## Prerequisites
-- A running Apache Spark cluster for the data processing. With your Apache Spark deployment of choice!
-- AWS Identity and access management (IAM) credentials with permissions for Amazon S3 and Redshift cluster access.
-- A running Amazon Redshift cluster for the data warehouse.
-
-
-1. From the repository, download/transfer 4 No. Python scripts and the config file, as detailed above, to a project workspace.<br>
-
-2. Add AWS credentials, cluster endpoint, database and IAM role details to the config file. As per example below...
-
-        [AWS]
-        AWS_ACCESS_KEY_ID = SDDFHYJFG7FREWRQQAZXH3DH
-        AWS_SECRET_ACCESS_KEY = Pdfgsf45srP+754SDFDSgbfuEbh
-        
-        [CLUSTER]
-        HOST = #TODO example(dwhcluster.cbndkripqrtkx.us-west-2.redshift.amazonaws.com)
-        DB_NAME = lndbikehire
-        DB_USER = lbhuser
-        DB_PASSWORD = Passw0rd
-        DB_PORT = 5439
-        
-        [IAM_ROLE]
-        ARN ='arn:aws:iam::096836204836:role/dwhRole'
-
-3. Open a terminal window to your workspace and change directory to where the project files are located.<br>
-   
-        C:\users\username>cd C:\users\username\path\to\project
-   
-4. Run first Python script to create table schema on Redshift cluster... *create_tables.py*;<br>
-
-        C:\users\username>cd C:\users\username\path\to\project>python3 create_tables.py
-
-5. Run second python script to process S3 hosted JSON files to staging tables and final star schema tables... *etl.py*;<br>
-
-        C:\users\username>cd C:\users\username\path\to\project>python3 etl.py 
-
----
