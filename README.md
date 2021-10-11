@@ -355,7 +355,7 @@ rental_start_month | count | averagejourneyduration(mins)
 </p>
 
 
-### Average journey distance for weather condition
+### Average journey distance for weather condition...
 
         SELECT f.rental_start_month AS "Rental Month",
                 ddw.conditions AS "Weather Condition",
