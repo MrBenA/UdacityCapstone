@@ -314,6 +314,92 @@ Sample...
 **rental_id** | **bike_id** | **rental_duration_seconds** | **start_station_id** | **rental_start_date** | **end_station_id** | **rental_end_date** | **rental_start_year** | **rental_start_month** | **rental_start_day**
 --- | --- | --- | --- | --- | --- | --- | --- | --- | ---
 10149896 | 4655	| 515 | 14 | 2012-02-22 07:45:00 | 67 | 2012-02-22 07:54:00 | 2012 | 2 | 22
+<br>
+
+
+# :thumbsup: Successful pipeline run
+
+<p>
+<img alt="Terminal" src="images/lndbikehire_terminal.png" title="Pipeline Success"/>
+</p>
+
+## :question: Queries on the data model after a successful pipeline run
+
+###Rentals per month with average rental duration...
+
+        SELECT f.rental_start_month,
+            COUNT(f.rental_id) AS "Rentals",
+            AVG(f.rental_duration_seconds/60) AS "Average Journey Duration (Mins)"
+        FROM fact_journeys f
+            WHERE f.rental_duration_seconds > 60
+        GROUP BY f.rental_start_month
+        ORDER BY f.rental_start_month;
+
+rental_start_month | count | averagejourneyduration(mins)
+--- | --- | ---
+1 | 459273 | 16
+2 | 469886 | 17
+3 | 798443 | 22
+4 | 588084 | 23
+5 | 848772 | 23
+6 | 784105 | 23
+7 | 926155 | 24
+8 | 1086579 | 23
+9 | 980457 | 20
+10 | 833581 | 18
+11 | 706253 | 17
+12 | 497582 | 19
+
+<p align="center">
+<img alt="Rental Count Query" src="images/lndbikehire_query1.png" title="Rental Count Query"/>
+</p>
+
+
+### Average journey distance for weather condition
+
+        SELECT f.rental_start_month AS "Rental Month",
+                ddw.conditions AS "Weather Condition",
+                ROUND(AVG(djd.journey_distance_km),1) AS "Average Journey Distance KM"
+        FROM fact_journeys f
+            LEFT JOIN dim_journey_distances djd ON f.rental_id = djd.rental_id
+            LEFT JOIN dim_daily_weather ddw ON f.rental_start_month = ddw.month AND f.rental_start_day = ddw.day_of_month
+        GROUP BY f.rental_start_month, ddw.conditions
+        ORDER BY f.rental_start_month;
+
+rentalmonth | weathercondition | averagejourneydistancekm
+--- | --- | ---
+1 | Rain | 2
+1 | Clear | 2
+2 | Rain | 2
+2 | Clear | 1.9
+2 | Snow | 1.9
+3 | Rain | 2
+3 | Clear | 2.1
+4 | Rain | 2.1
+4 | Clear | 2.2
+5 | Rain | 2.1
+5 | Clear | 2.2
+6 | Clear | 2.2
+6 | Rain | 2.1
+7 | Clear | 2.3
+7 | Rain | 2.2
+8 | Clear | 2.2
+8 | Rain | 2.2
+9 | Rain | 2.1
+9 | Clear | 2.1
+10 | Clear | 2.1
+10 | Rain | 2
+11 | Rain | 2
+11 | Clear | 2
+12 | Rain | 2
+12 | Clear | 2
+12 | Snow | 2
+
+<p align="center">
+<img alt="Logical Data Model" src="images/lndbikehire_query2.png" title="Average Journey Distances"/>
+</p>
+<br>
+
 
 # Addressing other scenarios
 
